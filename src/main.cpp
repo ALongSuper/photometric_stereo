@@ -4,7 +4,7 @@
  * @Author: SJL
  * @Date: 2024-07-16 15:27:22
  * @LastEditors: SJL
- * @LastEditTime: 2024-12-26 10:58:23
+ * @LastEditTime: 2025-05-14 14:32:05
  */
 #include <torch/torch.h>
 #include <c10/util/Half.h>
@@ -28,7 +28,7 @@ int main() {
         //std::string obj = "calib_ball";
         //std::string obj = "flooring";
         std::string obj = "bearing";
-
+        
         // 光源方向标定    
         cv::Mat img_ball;
         std::vector<cv::Mat> calib_images;
@@ -158,12 +158,21 @@ int main() {
         torch::Tensor cosTheta = dotProduct;//均为单位向量模为1
         torch::Tensor angleRadians = torch::acos(cosTheta);
         torch::Tensor angleDegrees = angleRadians * (180.0 / M_PI);
-
+        
         torch::Tensor tensor_normalized_angle = torch::clamp(angleDegrees, angleDegrees.min().item<float>(), angleDegrees.max().item<float>());
         angleDegrees = angleDegrees.to(torch::kCPU);
         cv::Mat angle_f_map(cv::Size(width, height), CV_32FC1, angleDegrees.data_ptr());
 
-        // *********4 .旋度图与曲率图**************
+        //*********************4 .法向量渲染图***************************    
+        torch::Tensor tensor_r = ((split_tensors[0]+1)*0.5*255).to(torch::kUInt8);
+        torch::Tensor tensor_g = ((split_tensors[1]+1)*0.5*255).to(torch::kUInt8);
+        torch::Tensor tensor_b = ((split_tensors[2]+1)*0.5*255).to(torch::kUInt8);
+        torch::Tensor normals_tensor2 = torch::cat({ tensor_b, tensor_g, tensor_r },1);
+        normals_tensor2 = normals_tensor2.permute({ 0, 2, 3, 1 }).contiguous();
+        normals_tensor2 = normals_tensor2.to(torch::kCPU);
+        cv::Mat normals_map = cv::Mat(cv::Size(width, height), CV_8UC3,normals_tensor2.data_ptr());
+
+        // *********5 .旋度图与曲率图**************
         cv::Mat curvature_f_map,curl_f_map;
         get_curvature_map(tensor_gx,tensor_gy,curvature_f_map,curl_f_map);
 
@@ -179,6 +188,7 @@ int main() {
         //cv::imwrite("../../img/"+obj+"/gy_f_map.tif",gy_f_map);
         cv::imwrite("../../img/"+obj+"/curvature.tif",curvature_f_map);
         cv::imwrite("../../img/"+obj+"/curf.tif",curl_f_map);
+        cv::imwrite("../../img/"+obj+"/normals.png",normals_map);
 
     }catch(const c10::Error  &e)
     {

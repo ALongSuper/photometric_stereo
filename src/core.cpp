@@ -91,7 +91,8 @@ bool light_calib(cv::Mat img, std::vector<cv::Mat> calib_images,cv::Mat & lights
         torch::Tensor tensor_Z = torch::fft::ifft2(dft_Z);
         tensor_Z = torch::real(tensor_Z).to(torch::kFloat32);
         torch::Tensor tensor_normalized_depth = torch::clamp(tensor_Z, tensor_Z.min().item<float>(), tensor_Z.max().item<float>());
-        tensor_Z = tensor_Z.to(torch::kCPU);
+        tensor_normalized_depth = (tensor_normalized_depth - tensor_normalized_depth.min()) / (tensor_normalized_depth.max() - tensor_normalized_depth.min());
+        tensor_Z = tensor_normalized_depth.to(torch::kCPU);
         cv::Mat depth_f_map(cv::Size(width, height), CV_32FC1, tensor_Z.data_ptr());
         depth_map = depth_f_map.clone();
     }
@@ -133,6 +134,9 @@ bool light_calib(cv::Mat img, std::vector<cv::Mat> calib_images,cv::Mat & lights
         tensor_curvature.masked_fill_(limitdownMask, 0);
         torch::Tensor limitupMask = tensor_curvature > 1;
         tensor_curvature.masked_fill_(limitupMask, 1);
+        torch::Tensor nanMask = torch::isnan(tensor_curvature);
+        tensor_curvature.masked_fill_(nanMask, 1);
+        
         // float invgamma = 1/0.9;
         // tensor_curvature = tensor_curvature.pow(invgamma);
 
